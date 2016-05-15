@@ -5,6 +5,7 @@ const WebSocketServer = require("websocket").server;
 const http = require("http");
 const net = require("net");
 const port = 6667;
+const separator = "\r\n";
 
 function log() {
     console.log(Date.now(), ...arguments);
@@ -39,9 +40,11 @@ wsServer.on("request", request => {
 	socket.setEncoding("utf-8");
     socket.connect(port, server);
 
+    let buffer = "";
+
     connection.on("message", message => {
         log("ws -> irc", message.utf8Data);
-        socket.write(message.utf8Data + "\r\n");
+        socket.write(message.utf8Data + separator);
     });
 
     connection.on("close", (reasonCode, description) => {
@@ -50,12 +53,15 @@ wsServer.on("request", request => {
     });
 
     socket.addListener("data", data => {
-        data = data.split("\r\n");
-        data.forEach(message => {
-            if (!message) { return; }
+        buffer += data;
+        while (1) {
+            let index = buffer.indexOf(separator);
+            if (index == -1) { break; }
+            let message = buffer.substring(0, index);
             log("irc -> ws", message);
-    		connection.send(message);
-        });
+            connection.send(message);
+            buffer = buffer.substring(index + separator.length);
+        }
 	});
 
     socket.addListener("close", () => {
